@@ -1,4 +1,5 @@
 #/usr/bin/env python3
+
 import requests
 from lxml import html,etree 
 from io import StringIO
@@ -6,17 +7,16 @@ import datetime
 from datetime import timedelta
 import urllib.request
 import os
-#from urllib.parse import urlparse, urlunparse, quote
 import time
 from clint.textui import progress
 import bz2
+import json
 from bgpdumpy import BGPDump, TableDumpV2
 
 now = datetime.datetime.now()
 server_url = "http://routeviews.org"
 as_number = "197695"
-#as_number = "56477"
-DEBUG_FILE = True
+DEBUG_FILE = False 
 r = requests.get(server_url)
 if not r.status_code == 200:
 
@@ -29,6 +29,20 @@ html_page = r.content.decode('utf-8')
 
 out = html.fromstring(html_page).xpath('//a/@href')
 
+def json_out(networks,filename,as_number):
+    if DEBUG_FILE:
+        print("JSON_OUT: AS{} \n {}\n".format(as_number,networks))
+    data = {}
+    data['AS'] = []
+    data['AS'].append({
+        'as_name':   str(as_number),
+        'sum' :   len(networks),
+        'networks':  str(networks)})
+    filename_json = "AS{}_{}.json".format(as_number,filename)
+    with open(filename_json,'w') as f_json:
+        json.dump(data,f_json)
+
+    
 def item_id(item):
      mas = item.split('.')
 
@@ -134,38 +148,47 @@ for link in links:
                 list_networks = list()
                 link_ribs = link + now.strftime("/%Y.%m/") + 'RIBS/'
                 link_ribs_file, dir_ribs = links_downloads(link_ribs)
-                print(link_ribs_file)
 
                 list_networks  = download(dir_ribs,link_ribs_file)
-                print(list_networks)
-                for item in list_networks:
-                    print(item)
-                    networks.add(item)
- 
                 if DEBUG_FILE:
+                    print(list_networks)
+                for item in list_networks:
+                    if DEBUG_FILE:
+                        print(item)
+                    networks.add(item)
+
+
+                print("RIBS Количество сетей :{:d} для AS{:5} в файле: {:5}".format(len(networks),as_number,link_ribs))
+                if DEBUG_FILE:
+                    json_out(networks,"RIB_BGP",as_number)
                     print("RIBS list:",list_networks)
                     print("RIBS Networks", networks)
                     print("RIBS Количество сетей :{:d} для AS{:5} в файле: {:5}".format(len(networks),as_number,link_ribs))
-
-
 
             if True:
                 list_networks = list()
                 link_updates = link + now.strftime("/%Y.%m/") + 'UPDATES/'
                 link_updates_file, dir_update   =   links_downloads(link_updates)
-                print(link_updates_file)
                 list_networks = download(dir_update,link_updates_file)        
+                if DEBUG_FILE:
+                    print(list_networks)
                 for item in list_networks:
                     networks.add(item)
+
+                print("RIBS Количество сетей :{:d} для AS{:5} в файле: {:5}".format(len(networks),as_number,link_updates))
                 if DEBUG_FILE:
+
+                    json_out(networks,"UPDATE_BGP",as_number)
                     print("UPDATES list:",len(list_networks))
                     print("UPDATES Networks", networks)
                     print("UPDATES Количество сетей :{:d} для AS{:5} в файле: {:5}".format(len(networks),as_number,link_updates))
-
-
     except:
-        print("Скачали все , кроме этой ссылки ",link)
+        if DEBUG_FILE:
+            print("Скачали все , кроме этой ссылки ",link)
+        else:
+            pass
 
 print(" Загрузка завершена! :)")
 
 print("Общее количество сетей :{:d} для AS{:5}".format(len(networks),as_number))
+json_out(networks,"NET_BGP_ALL",as_number)
